@@ -26,12 +26,14 @@ dist/
 *.egg-info/
 *.spec
 *.zip
-*.exe # Ignore executables directly in root, the one in dist/ is already ignored by dist/
+# Ignore executables directly in root, the one in dist/ is already ignored by dist/
+*.exe 
 .installed.cfg
 *.egg
 
 # PyInstaller # Redundant with build/ and *.spec, but explicit
 *.manifest
+
 
 # Installer logs
 pip-log.txt
