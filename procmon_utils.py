@@ -15,8 +15,11 @@ import datetime
 import os
 import psutil  
 
-# Exceção customizada para erros na coleta de stats
+# Exceção customizada 
 class StatsCollectionError(Exception):
+    pass
+class CoreInfoError(Exception):
+    """Exceção para erros ao obter informações dos núcleos da CPU."""
     pass
 
 
@@ -116,3 +119,90 @@ def get_process_stats(process_name):
         # Levanta uma exceção específica em vez de logar aqui
         raise StatsCollectionError(
             f"Erro ao iterar ou coletar estatísticas para o processo '{process_name}': {e}") from e
+
+
+def get_top_processes(num_processes=10,type='cpu'):
+    """
+    Coleta informações dos N processos que mais consomem CPU, incluindo uso de memória.
+
+    Args:
+        num_processes (int): O número de processos a serem retornados.
+        type (str): O tipo de métrica a ser usada para ordenação ('cpu' ou 'mem').
+
+    Returns:
+        list: Uma lista de dicionários, cada um contendo 'pid', 'name', 'cpu', 'mem'.
+              Retorna lista vazia em caso de erro grave na iteração.
+
+    Raises:
+        StatsCollectionError: Se ocorrer um erro significativo durante a coleta.
+    """
+    processes_data = []
+    try:
+        # ---> Pede também 'memory_percent' ao iterar <---
+        for proc in psutil.process_iter(['pid', 'name', 'cpu_percent', 'memory_percent']):
+            try:
+                cpu_percent = proc.info['cpu_percent']
+                # ---> Coleta memory_percent <---
+                mem_percent = proc.info['memory_percent']
+
+                # Inclui se tiver nome e ambos os percentuais (mesmo que 0.0)
+                if proc.info['name'] and cpu_percent is not None and mem_percent is not None:
+                    processes_data.append({
+                        'pid': proc.info['pid'],
+                        'name': proc.info['name'],
+                        'cpu': cpu_percent,                        
+                        'mem': mem_percent
+                    })
+            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                continue
+            except Exception as inner_e:
+                print(f"Aviso: Erro ao processar PID {proc.info.get('pid', '?')}: {inner_e}", file=sys.stderr) # Debug
+                continue
+
+        # Ordena APENAS pelo percentual de CPU
+        sorted_processes = sorted(
+            processes_data, key=lambda p: p[type], reverse=True)
+
+        return sorted_processes[:num_processes]
+
+    except Exception as e:
+        raise StatsCollectionError(
+            f"Erro ao iterar processos para obter Top CPU: {e}") from e
+
+
+def get_core_info():
+    """
+    Obtém informações sobre os núcleos da CPU e o uso percentual total do sistema.
+
+    Returns:
+        dict: Um dicionário contendo:
+              'physical' (int|None): número de núcleos físicos.
+              'logical' (int|None): número de núcleos lógicos.
+              'system_usage_percent' (float|None): uso percentual total da CPU.
+
+    Raises:
+        CoreInfoError: Se ocorrer um erro na coleta de dados do psutil.
+    """
+    core_info = {
+        'physical': None,
+        'logical': None,
+        'system_usage_percent': None
+    }
+    try:
+        core_info['physical'] = psutil.cpu_count(logical=False)
+        core_info['logical'] = psutil.cpu_count(logical=True)
+        # Usa um intervalo curto para uma medição mais representativa do uso atual do sistema
+        core_info['system_usage_percent'] = psutil.cpu_percent(interval=0.1)
+
+        # Verifica se algum valor essencial não foi obtido (pouco provável para cpu_count/percent)
+        if core_info['physical'] is None or core_info['logical'] is None or core_info['system_usage_percent'] is None:
+            raise CoreInfoError(
+                "Não foi possível obter todos os dados de CPU (cores/uso).")
+
+        return core_info
+    except NotImplementedError as e:
+        raise CoreInfoError(
+            f"Funcionalidade não suportada pela plataforma/psutil: {e}") from e
+    except Exception as e:
+        raise CoreInfoError(
+            f"Erro ao obter informações dos núcleos/uso da CPU via psutil: {e}") from e
