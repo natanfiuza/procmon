@@ -5,12 +5,12 @@ Ponto de entrada principal para o ProcMon.
 Carrega configuração, lida com CLI ou inicia o loop de monitoramento.
 """
 
+from dotenv import load_dotenv
 import os
 import sys
 import time
 import datetime
 import logging  # Ainda necessário para o logging no loop principal
-from dotenv import load_dotenv
 
 # Importa dos nossos módulos customizados
 from procmon_models import PidFilter
