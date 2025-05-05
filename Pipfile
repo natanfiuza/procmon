@@ -8,6 +8,7 @@ pyinstaller = "*"
 python-dotenv = "*"
 psutil = "*"
 tabulate = "*"
+dotenv = "*"
 
 [dev-packages]
 
